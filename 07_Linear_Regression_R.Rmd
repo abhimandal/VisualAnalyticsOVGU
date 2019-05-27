@@ -21,6 +21,25 @@ knitr::opts_chunk$set(echo = TRUE,
                       message = FALSE)
 ```
 
+```{r}
+library(stringr)
+library(readr)
+library(dplyr)
+
+# (Adapt Path)
+hprice <- read_csv(str_c(dirname(getwd()), "/Datasets/hprice.csv"))
+
+# The general approach behind each of the examples that we’ll cover below is to:
+# 
+# 1. Fit a regression model to predict variable (Y).
+# 2. Obtain the predicted and residual values associated with each observation on (Y).
+# 3. Plot the actual and predicted values of (Y) so that they are distinguishable, but connected.
+# 4. Use the residuals to make an aesthetic adjustment (e.g. red colour when residual in very high) to highlight points which are poorly predicted by the model.
+#source: https://drsimonj.svbtle.com/visualising-residuals
+
+```
+
+
 A broker wants to use linear regression to find out which factors have a large influence on the price of a property. For this purpose, the variables described in Table 1 are given for the last 88 sales in the broker's region.
 
 Table: Table 1 House price record
@@ -39,10 +58,62 @@ Variabel   | Description
 1.  Create a linear regression model with `price` as dependent variable and `bdrms`, `lotsize`, `sqrm` und `country`  as independent variables. 
     a) Determine the regression coefficients and  $p$-values of the dependent variable and compare their influence within the model on the predicted value for  `price`. 
     b) Determine how much variance of the dependent variable is explained. 
-    c) Check the residuals (graphically) for normal distribution and homoskedasticity.
+    c) Check the residuals (graphically) for normal distribution and homoscedasticity.
     
 ```{r}
 # Solution for Task 1...
+
+# Initial implementation & explanation - http://r-statistics.co/Linear-Regression.html 
+# Theory & Explanation - http://sphweb.bumc.bu.edu/otlt/MPH-Modules/BS/R/R5_Correlation-Regression/R5_Correlation-Regression7.html
+#Explanations for all the graphs (very good) - https://ademos.people.uic.edu/Chapter12.html
+
+
+
+
+#Solution 
+
+
+#Part - a
+
+lmodel <- lm(price ~ bdrms+lotsize+sqrm+country, data = hprice)
+summary(lmodel)
+plot(lmodel)
+#plot(lmodel, which = 1:4)
+# pvalue is at the bottom end (for model) and right most col. of coefficients (for individual variables). 
+# Ideal p<0.05.
+#We can consider a linear model to be statistically significant only when both these p-Values are less that the pre-determined statistical significance level(0.05).
+# For individual variables, the most no. of stars, the more significant they are.
+
+
+#Part - b
+
+#Plot: Residual vs Fitted
+#for linearity - the values should not be too far from 0(on +-y axis).Standardized values less than -2 or greater than 2 are deemed problematic)
+
+#R² of 0.02; this means that the model explains only 2% of the data variability.  R² of 0.99, and the model can explain 99% of the total variability.
+#Adjusted R² -> 0.66. Therefore 66% of the variability can ve explained by model
+#Adjusted R² taken because normal R² increases irrespectively as you increase the no. of independent variables
+
+
+
+#Part - c
+
+#Normal Distribution - QQ plot: Fitting properly. So normality holds here.
+#Normality - For any fixed value of X, Y is normally distributed. 
+# distribution of studentized residuals
+library(MASS)
+sresid <- studres(lmodel) 
+hist(sresid, freq=FALSE, 
+   main="Distribution of Studentized Residuals")
+xfit<-seq(min(sresid),max(sresid),length=40) 
+yfit<-dnorm(xfit) 
+lines(xfit, yfit)
+
+
+#Homoscedasticity - Residuals should not have pattern (in Scale-Location or in plot(lmodel$residuals))
+#If the red line you see on your plot is flat and horizontal with equally and randomly spread data points (like the night sky), you’re good. If your red line has a positive slope to it, or if your data points are not randomly spread out, you’ve violated this assumption.
+
+
 ```
 
 2. Given be the linear regression model from task 1.
@@ -52,13 +123,43 @@ Variabel   | Description
 
 ```{r}
 # Solution for Task 2...
+
+plot(hprice$price, pch = 20, col = "blue")
+abline(lmodel)
+
+plot(lmodel$residuals, pch = 20, col = "blue")
+plot(y= hprice$price, x = lmodel$residuals,  pch = 20, col = "blue")
+abline(lmodel)
+
+
+
+#part-b
+plot(lmodel, which = 1, col=ifelse((lmodel$residuals>100 | lmodel$residuals< -100), 'red', 'blue'))
+
+#part-c
+#https://www.datacamp.com/community/tutorials/linear-regression-R 
+
+lmodel1 <- lm(price ~ bdrms+I(log(bdrms))+lotsize+sqrm+country, data = hprice)
+#lmodel1 <- lm(price ~ bdrms+I(1/exp(bdrms))+lotsize+sqrm+country, data = hprice)
+summary(lmodel)
+summary(lmodel1)
+
 ```
 
 3. Graphically display the relationship between `bdrms` and `price`. Check whether this relationship is also reflected in the regression model from Task 1. Create a regression model with `bdrms` as the only independent variable. Compare the regression coefficients with those of the model from Task 1 and interpret the differences. 
 
+
 ```{r}
 # Solution for Task 3...
+
+plot(x=hprice$bdrms, y=hprice$price)
+
+lmodel2 = lm(price~bdrms, data=hprice)
+summary(lmodel)
+summary(lmodel2)
+
 ```
+
 ------
 Dataset:
 
