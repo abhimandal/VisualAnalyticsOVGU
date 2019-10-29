@@ -1,0 +1,162 @@
+---
+title: "Excersice Sheet 6"
+fontsize: 11pt
+header-includes: \usepackage[german]{babel}
+output:
+  pdf_document:
+    highlight: haddock
+  html_document: default
+fig_caption: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      eval = TRUE,
+                      warning = FALSE,
+                      message = FALSE)
+```
+
+_What factors explain excessive alcohol consumption among students?_ The record for the task sheet comes from a survey of students who attended mathematics and Portuguese courses and contains many interesting details about their sociodemographics, life circumstances and learning success.  
+The ordinal scaled variables `Dalc` and `Walc` give information about the alcohol consumption of the students on weekdays and weekends. Create a binary target variable `alc_prob` as follows:
+
+```{r, echo=T, eval=T}
+library(stringr)
+library(readr)
+library(dplyr)
+library(tidyverse)
+library(caret)
+
+# (adapt path)
+student <- read_csv(str_c(dirname(getwd()), "/Datasets/student_alc.csv"))
+student <- student %>%
+map_if(is.character, as.factor) %>%
+bind_cols()
+student <- student %>%
+mutate(alc_prob = ifelse(Dalc + Walc >= 6, "alc_p", "no_alc_p"))
+```
+
+1. Calculate the Gini index for the target variable `alc_prob` and the _Gini index_ for each variable with respect to `alc_prob`. Determine the 5 variables with the highest _Gini Gain_.
+
+```{r}
+# Solution for Task 1
+
+#for numerical values, discretize them in ranges.
+#how are the GINI values should be handled. Like high or low values.
+str(student)
+
+# class distribution
+table(student$alc_prob)
+
+# Gini-Index of target variable
+gini_class <- 1 - sum(prop.table(table(student$alc_prob))^2)
+gini_class
+
+# Gini-Index of each variable w.r.t. 'alc_prob'
+li_gini <- vector("list", length = ncol(student))
+
+  for(var in 1:ncol(student)) {
+    if(is.factor(student[[var]])) {
+      df_gini <- tibble(variable = names(student)[[var]], gini = NA)
+      df_gini$gini[1] <- myGini(student[[var]], student$alc_prob)
+      li_gini[[var]] <- df_gini
+    }
+      
+    # For numeric variables calculate Gini index for all possible split points
+    if(is.numeric(student[[var]])) {
+      split_points <- sort(unique(student[[var]]))
+      df_gini <- tibble(variable = str_c(names(student)[[var]], "<=", split_points),gini = NA)
+      
+      
+      for(sp in 1:length(split_points)) {
+        temp_var <- cut(student[[var]], breaks = c(-Inf, split_points[sp], Inf))
+        df_gini$gini[sp] <- myGini(temp_var, student$alc_prob)
+      }
+      
+      #Choose best split, i.e. split with lowest Gini Index
+      li_gini[[var]] <- df_gini %>% filter(!is.nan(gini)) %>% arrange(gini) %>% slice(1)
+    }
+  }
+
+student_gini <- do.call("rbind", li_gini)
+student_gini %>%
+filter(!variable == "alc_prob") %>%
+mutate(gini_gain = myGini(1, student$alc_prob) - gini) %>%
+mutate(variable = forcats::fct_reorder(variable, gini_gain)) %>%
+ggplot(aes(x = variable, y = gini_gain)) +
+geom_bar(stat = "identity") +
+coord_flip() +
+labs(title = "Gini Gain of all variables w.r.t. 'alc_prob'", y = "")
+
+
+
+```
+
+2. Learn 2 different decision trees with `alc_prob` as target variable. For the first tree, nodes should be further partitioned until the class distribution of all resulting leaf nodes is pure. For the second tree, nodes with a cardinality of less than 20 instances should not be further partitioned. Determine the quality of the trees by calculating sensitivity (_True Positive Rate_) and specificity (_True Negative Rate_) for a 70%:30% split in training and test sets. Display the decision trees graphically and discuss the differences in quality measures
+
+```{r}
+# Solution for Task 2
+
+# https://www.guru99.com/r-decision-trees.html
+# https://rstudio-pubs-static.s3.amazonaws.com/108298_75e23efda7f845f98af2c549a26b5958.html 
+# https://www.rdocumentation.org/packages/rpart/versions/4.1-15/topics/rpart
+# https://www.analyticsvidhya.com/blog/2016/04/complete-tutorial-tree-based-modeling-scratch-in-python/ - Theory and implementation
+
+
+library(rpart)
+library(rattle)
+
+set.seed(123)
+inTrain <- sample(c(FALSE, TRUE), size = nrow(student), replace = TRUE, prob = c(.3, .7))
+student <- map_df(student, ~if(is.character(.)){factor(.)}else{.})
+student_train <- student %>% select(-Walc, -Dalc) %>% filter(inTrain)
+student_test <- student %>% select(-Walc, -Dalc) %>% filter(!inTrain)
+
+
+fit <- rpart(alc_prob ~ ., data = student_train,
+control = rpart.control(minsplit = 1, minbucket = 1))
+fancyRpartPlot(fit, sub = "")
+p <- predict(fit, student_test %>% select(-alc_prob) , type = "class")
+cm <- confusionMatrix(student_test$alc_prob, p, dnn = c("True Label", "Predicted Label"))
+cm
+
+#2nd Tree
+
+fit <- rpart(alc_prob ~ ., data = student_train,
+control = rpart.control(minsplit = 20, minbucket = 1))
+fancyRpartPlot(fit, sub = "")
+
+
+p <- predict(fit, student_test %>% select(-alc_prob) , type = "class")
+cm <- confusionMatrix(student_test$alc_prob, p, dnn = c("True Label", "Predicted Label"))
+cm
+
+```
+
+3. Use `randomForest::randomForest()` to create a random forest with 200 trees. As candidates for a split within a tree a random sample of 5 variables should be drawn. Calculate Accuracy, Sensitivity and Specificity for the Out-of-the-Bag instances and show the most important variables (`?importance`).
+
+```{r}
+# Solution for Task 3
+
+library(randomForest)
+set.seed(123)
+rf <- randomForest(alc_prob ~ ., data = student %>% select(-Dalc, -Walc),
+ntree = 500, mtry = 5)
+cm <- rf$confusion[1:2,1:2]
+acc <- sum(diag(cm))/sum(sum(cm))
+acc
+
+sens <- cm[1,1]/sum(cm[1,])
+sens
+
+spec <- cm[2,2]/sum(cm[2,])
+spec
+
+varImpPlot(rf, type = 2)
+
+
+```
+
+
+------
+Dataset: http://isgwww.cs.uni-magdeburg.de/cv/lehre/VisAnalytics/material/exercise/datasets/student_alc.csv  
+(Source: https://www.kaggle.com/uciml/student-alcohol-consumption)

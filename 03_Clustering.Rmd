@@ -1,0 +1,184 @@
+---
+title: "Exercise Sheet 3"
+fontsize: 11pt
+header-includes: \usepackage[german]{babel}
+output:
+  html_document: default
+  pdf_document:
+    highlight: tango
+fig_caption: yes
+
+# https://lgatto.github.io/2017_11_09_Rcourse_Jena/visualisation-of-high-dimensional-data-in-r.html 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # -> Sollen Code Chunks im gerenderten Dokument angezeigt werden?
+                      eval = TRUE, # -> Sollen R Code Chunks ausgeführt werden?
+                      warning = FALSE, # -> Warnungen sollten nur am Ende zum Rendern auf FALSE gesetzt werden
+                      message = FALSE) # -> Hinweise sollten nur am Ende zum Rendern auf FALSE gesetzt werden
+
+library(tidyverse)
+library(stringr)
+library(magrittr)
+```
+
+1. The following two-dimensional data set is given. Perform a $K$-means Clustering with $K=3$ using the Euclidean distance. Use the first three points as initial centroids. For each algorithm iteration, specify the distances between centroids and all points and calculate the changed centroids after each reassignment of the points. 
+
+<nbsp;>   | p1 | p2 | p3 | p4 | p5 | p6 | p7 | p8| p9 | p10 | p11 | p12
+--------- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | --  | -- 
+x         | 2.0| 2.0| 2.0| 2.5| 2.5| 3.0| 4.0| 4.0| 4.5| 4.5| 4.5 | 4.5
+y         | 1.0| 1.5| 2.0| 1.0| 2.0| 4.0| 1.0| 2.5| 1.0| 1.5| 2.5 | 3.0
+
+```{r}
+dat <- tibble(
+   x = c(2.0, 2.0, 2.0, 2.5, 2.5, 3.0, 4.0, 4.0, 4.5, 4.5, 4.5 , 4.5),
+   y = c(1.0, 1.5, 2.0, 1.0, 2.0, 4.0, 1.0, 2.5, 1.0, 1.5, 2.5 , 3.0)
+ )
+
+# Solution of task 1...
+cluster <- kmeans(dat,5, 1, )
+
+
+
+```
+
+2. A school would like to group its pupils according to their performance at two intermediate examinations. It is assumed that there are at least 2 clusters of pupils. Load the file `clustering-student-mat.csv`. The file contains for each of the two exams the number of points scored for a total of 395 students.  
+Perform a $K$-means-Clustering for each $k\in \{2,3,\ldots,8\}$. Display the cluster assignments of the points in a scatter plot. 
+
+```{r}
+# Solution of task 2...
+
+#The main disadvantage of the method lies in its sensitivity to initial positions of the cluster centers.
+#Therefore, in order to obtain near optimal solutions using the k-means algorithm several runs must be scheduled
+#differing in the initial positions of the cluster centers.
+
+
+# https://uc-r.github.io/kmeans_clustering
+# https://www.datanovia.com/en/lessons/k-means-clustering-in-r-algorith-and-practical-examples/
+# https://stackoverflow.com/questions/43007261/factoextra-package-how-can-i-plot-my-clusters-using-variable-axes-not-pca-compo 
+
+
+student <- read_csv(str_c(dirname(getwd()), "/Exercise3/clustering-student-mat.csv"))
+
+student <-na.omit(student)
+
+k_values = c(2,3,4,5,6,7,8)
+
+#for(i in as.numeric(k_values)){
+#clus[i] <-kmeans(student,i,5)
+#plot(student, col=clus[i]$cluster)}
+
+
+clus_2<-kmeans(student,2,5)
+clus_3<-kmeans(student,3,5)
+clus_4<-kmeans(student,4,5)
+clus_5<-kmeans(student,5,5)
+clus_6<-kmeans(student,6,5)
+clus_7<-kmeans(student,7,5)
+clus_8<-kmeans(student,8,5)
+
+
+plot(student, col=clus_2$cluster, main = "2 Centers")
+plot(student, col=clus_3$cluster, main = "3 Centers")
+plot(student, col=clus_4$cluster, main = "4 Centers")
+plot(student, col=clus_5$cluster, main = "5 Centers")
+plot(student, col=clus_6$cluster, main = "6 Centers")
+plot(student, col=clus_7$cluster, main = "7 Centers")
+plot(student, col=clus_8$cluster, main = "8 Centers")
+
+
+```
+
+3. For the clustering in task 2, use the silhouette coefficient to find the optimal value for the number of clusters $K$. Evaluate the result for the representativeness of the centroids with respect to their cluster.
+
+```{r}
+# Solution of task 3...
+library(cluster)
+
+
+# function to compute average silhouette for k clusters
+avg_sil <- function(k) {
+  km.res <- kmeans(df, centers = k, nstart = 25)
+  ss <- silhouette(km.res$cluster, dist(df))
+  mean(ss[, 3])
+}
+
+# Compute and plot wss for k = 2 to k = 8
+k.values <- 2:8
+
+
+# extract avg silhouette for 2-15 clusters
+avg_sil_values <- map_dbl(k.values, avg_sil)
+
+plot(k.values, avg_sil_values,
+       type = "b", pch = 19, frame = FALSE, 
+       xlab = "Number of clusters K",
+       ylab = "Average Silhouettes")
+
+#https://stackoverflow.com/questions/43007261/factoextra-package-how-can-i-plot-my-clusters-using-variable-axes-not-pca-compo 
+
+
+library("factoextra")
+fviz_nbclust(student, kmeans, method = "silhouette", k.max = 8)
+
+```
+
+4. The following distance matrix is given. Perform agglomerative hierarchical clustering with  _single_ und _complete_ linkage. Display the result in a dendrogram. The dendrogram should represent the order in which the points are joined.
+
+```{r}
+dm <- tribble(~p1,~p2,~p3,~p4,~p5,
+              0.00, 0.02, 0.90, 0.36, 0.53,
+              0.02, 0.00, 0.65, 0.15, 0.24,
+              0.90, 0.65, 0.00, 0.59, 0.45,
+              0.36, 0.15, 0.59, 0.00, 0.56,
+              0.53, 0.24, 0.45, 0.56, 0.00) %>% as.matrix()
+rownames(dm) <- letters[1:5]
+colnames(dm) <- letters[1:5]
+knitr::kable(dm)
+```
+
+
+```{r}
+# Solution of task 4...
+# https://www.datacamp.com/community/tutorials/hierarchical-clustering-R
+# https://www.kaggle.com/questions-and-answers/43142 
+
+
+#problem with single linkage : chain effect
+
+dist_mat <- dist(dm, method = 'euclidean')
+hc1 <- hclust(dist_mat, method = "complete")
+hc2 <- hclust(dist_mat, method = "single")
+# Plot the obtained dendrogram
+plot(hc1, cex = 0.6, hang = -1, main = "Complete linkage")
+
+#has to be called after plot to work
+rect.hclust(hc1, k = 2, border = 2:6)
+abline(h = 1, col = "blue")
+
+
+suppressPackageStartupMessages(library(dendextend))
+avg_dend_obj_1 <- as.dendrogram(hc1)
+avg_col_dend_1 <- color_branches(avg_dend_obj_1, h = 1)
+plot(avg_col_dend_1, main = "Complete linkage Colored")
+
+
+
+plot(hc2, cex = 0.6, hang = -1, main = "Single linkage")
+
+#has to be called after plot to work
+rect.hclust(hc1, k = 2, border = 2:6)
+abline(h = 0.6, col = "blue")
+
+
+suppressPackageStartupMessages(library(dendextend))
+avg_dend_obj_2 <- as.dendrogram(hc2)
+avg_col_dend_2 <- color_branches(avg_dend_obj_2, h = 0.6)
+plot(avg_col_dend_2, main = "Single linkage Colored")
+
+```
+
+------
+
+Dataset for task 2:  
+http://isgwww.cs.uni-magdeburg.de/cv/lehre/VisAnalytics/material/exercise/datasets/clustering-student-mat.csv

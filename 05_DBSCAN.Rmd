@@ -1,0 +1,219 @@
+---
+title: "Exercise Sheet 5"
+fontsize: 11pt
+header-includes: \usepackage[german]{babel}
+output:
+  html_document: default
+  pdf_document: null
+highlight: tango
+fig_caption: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # -> Sollen Code Chunks im gerenderten Dokument angezeigt werden?
+                      eval = TRUE, # -> Sollen R Code Chunks ausgeführt werden?
+                      warning = FALSE, # -> Warnungen sollten nur am Ende zum Rendern auf FALSE gesetzt werden
+                      message = FALSE) # -> Hinweise sollten nur am Ende zum Rendern auf FALSE gesetzt werden
+```
+
+1. Use DBSCAN to find clusters from nearby large cities around the world (metropolitan areas). A city with at least 50,000 inhabitants is considered large. The $\epsilon$-neighborhood of a city contains all adjacent cities with a Euclidean distance of 0.15 or less in latitude and longitude. A city is considered a core object of a conurbation if at least 8 cities are located in its $\epsilon$-neighborhood. For clustering, use the `maps::world.cities`dataset. Answer the following questions: 
+    a) How many clusters, core objects, border objects and noise objects are found by DBSCAN?
+    b) How many cities does the largest cluster contain and in which country are the cities of the largest cluster located?
+    c) Which three countries have the most cities in clusters?
+    d) Are the Indian cities  `Rajendranagar` und `Rajpur` (directly) density-reachable or density-connected?
+    e) Are `Essen` und `Castrop-Rauxel` (directly) density-reachable or density-connected?
+    f) Which cities are density-reachable from Bochum, but not directly density-reachable?
+
+```{r}
+# Solution for task 1...
+
+# See Theory (has exercises) : https://www.r-bloggers.com/density-based-clustering-exercises/
+# https://www.r-bloggers.com/geographic-clustering-of-uk-cities/ 
+
+library(maps)
+library(magrittr) # need to run every time you start R and want to use %>%
+library(dplyr)    # alternative, this also loads %>%
+library(dbscan)
+library(factoextra)
+library(fpc)
+library(ggplot2)
+
+
+worldcities <- maps::world.cities
+
+#Filter out large cities
+largecities <- filter(worldcities, pop >=50000)
+
+#DBSCAN
+largecities_dbs <- fpc::dbscan(select(largecities, long, lat), eps = 0.15, MinPts = 8)
+
+#Adding new column clusters and adding cluster values from dbscan
+largecities$clusters <- largecities_dbs$cluster
+
+#groups  <- largecities %>% filter(clusters != 0)
+#noise  <- largecities %>% filter(clusters == 0)
+
+
+#print(largecities_dbs)
+#FVIZ Cluster print
+fviz_cluster(largecities_dbs, data = select(largecities, long, lat), stand = FALSE,
+             ellipse = FALSE, show.clust.cent = FALSE,
+             geom = "point",palette = "jco", ggtheme = theme_classic(), main = "DBSCAN USING FPC")
+
+
+
+#---------Part b-----------#
+
+
+statistics <- print(largecities_dbs)
+statistics <- data.frame(print(largecities_dbs))
+statistics <- rbind(statistics,0:41,row.names("cluster"))
+statistics <- transpose
+#statistics <- seq_len(ncol(statistics))
+
+for (i in seq_len(nrow(largecities))){
+  
+  
+}
+
+
+
+
+#---------Part e-----------#
+
+#for density reachable the point to be checked should alwats be from  core to other point..and not from border to core point. so we have to first check if the point is a core or a border. 
+
+
+
+```
+
+
+
+2. Given again be the dataset from task 2 of task sheet 3. This time use DBSCAN with $minPts=6$ for clustering. First determine a _suitable_ value for $\epsilon$. Display the clustering in a scatter plot. Highlight cluster assignments and noise points in color. Compare and discuss the clustering of DBSCAN with the clustering of $k$-Means. 
+
+```{r}
+#Example
+
+data(iris)
+iris <- as.matrix(iris[,1:4])
+kNNdist(iris, k=4, search="kd")
+kNNdistplot(iris, k=4)
+
+
+cl <- dbscan(iris, eps = .5, minPts = 4)
+pairs(iris, col = cl$cluster+1L)
+## Note: black are noise point
+```
+
+```{r}
+# Solution for task 2...
+library(stringr)
+library(readr)
+
+# https://www.datanovia.com/en/lessons/dbscan-density-based-clustering-essentials/
+# https://stackoverflow.com/questions/12893492/choosing-eps-and-minpts-for-dbscan-r 
+
+# student <- read.csv("E:/OVGU/Subject/Sem 3/Visual Analytics/Exercise3/clustering-student-mat.csv")
+student <- read_csv(str_c(dirname(getwd()), "/Datasets/clustering-student-mat.csv"))
+student <-na.omit(student)
+
+
+library(dbscan)
+library(factoextra)
+
+#To estimate the eps value using kNNdist by seeing knee/elbow point
+#kNNdist(student, k=4, search="kd")
+kNNdistplot(student, k=6) #k = minPts
+abline(h=5, lty = 2) #to plot dashed lines
+
+student_DBscan <- dbscan(student,eps = 5, MinPts = 6)
+
+hullplot(student, student_DBscan)
+
+fviz_cluster(student_DBscan, data = student, stand = FALSE,
+             ellipse = FALSE, show.clust.cent = FALSE,
+             geom = "point",palette = "jco", ggtheme = theme_classic())
+
+library(fpc)
+student_DBscan_fpc <- fpc::dbscan(student,eps = 5, MinPts = 6)
+print(student_DBscan_fpc)
+fviz_cluster(student_DBscan_fpc, data = student, stand = FALSE,
+             ellipse = FALSE, show.clust.cent = FALSE,
+             geom = "point",palette = "jco", ggtheme = theme_classic(), main = "DBSCAN USING FPC")
+
+
+```
+
+3. Given again, be the dataset from task 2 of task sheet 3. Use OPTICS to create a density reachability diagram for $minPts=6$. Extract a clustering for each $\textit{reachability-dist}=\{1,1.5,\ldots,5\}$ and display the result in a scatter plot, respectively. Highlight cluster assignments and noise points in color. Evaluate the change of the clustering result with increasing threshold for $\textit{reachability-dist}$ regarding the number of clusters as well as the number of core, border, and noise points. 
+
+```{r}
+# Solution for task 3...
+
+# Read Details : https://rdrr.io/cran/dbscan/man/optics.html 
+# Note that minPts in OPTICS has a different effect then in DBSCAN. It is used to define dense neighborhoods, but since eps is typically set rather high, this does not effect the ordering much. However, it is also used to calculate the reachability distance and larger values will make the reachability distance plot smoother.
+
+library(dbscan)
+
+stud_reach <- optics(student, minPts = 6)
+plot(stud_reach)
+
+#stud_reach$order
+#plot(stud_reach$order)
+
+reachability_dist= 1
+reachability_dist = seq(reachability_dist, 5, by = 0.5) #with stepsize 0.5
+
+# Note: 
+# x : a data matrix or a dist object. 
+# eps_cl : Threshold to identify clusters (eps_cl <= eps).
+# eps_cl = reachability distance for each point in x. 
+
+for(i in reachability_dist ){
+
+  stud_clust <- extractDBSCAN(stud_reach, eps_cl = i)
+  plot(stud_clust, main = paste("Reachability Plot with dist = ",i))
+  #paste used to concatenate strings in R
+
+  hullplot(student, stud_clust, main = paste("Convex Cluster Hulls with dist = ",i))
+  # fviz_cluster: Can't handle an object of class optics
+  
+  
+  print(paste("-----------Results for Reachability Distance = ",i," -----------"))
+  print("          ")
+  print(stud_clust) 
+  #1st Row : Clust Nos.; 
+  #2nd Row: No. of Pts in clusters
+  #0th Column: No. of outliers
+
+  
+  }
+
+#If eps_cl 
+#   = eps : Border Point
+#   < eps : Core
+#   > eps : Noise
+
+#stud_reach$order
+#stud_reach$reachdist
+
+```
+
+4. Using the example of the silhouette coefficient, discuss the strengths and weaknesses of internal quality measures. Why are they only conditionally suitable for the comparison between clusterings of different algorithms (e.g. $K$-Means and DBSCAN)? In which cases should they still be used?
+
+```{r}
+# Solution for task 4...
+
+# https://www.datanovia.com/en/blog/types-of-clustering-methods-overview-and-quick-start-r-code/#model-based-clustering
+
+"There are no optimal clusters, so we can't say which are best. Results depends on the hyperparameters"
+
+#U can use it when you have same clustering but different parameters, 
+#different types of density based or hierarchical. Sa
+
+
+```
+
+------
+
+Dataset for task 2 and 3:  
+http://isgwww.cs.uni-magdeburg.de/cv/lehre/VisAnalytics/material/exercise/datasets/clustering-student-mat.csv

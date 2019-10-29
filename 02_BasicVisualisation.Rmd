@@ -1,0 +1,302 @@
+---
+title: "Exercise Sheet 2"
+fontsize: 11pt
+header-includes: \usepackage[german]{babel}
+output:
+  pdf_document:
+    highlight: tango
+  html_document: default
+fig_caption: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # -> Should code chunks be displayed in the rendered document?
+                      eval = TRUE, # -> Should R Code Chunks be executed?
+                      warning = FALSE, # -> Warnings should only be set to FALSE at the end of rendering.
+                      message = FALSE) # -> Notes should only be set to FALSE at the end of rendering.
+```
+
+The _European Soccer Database_ contains data on more than 25.000 national football matches from the best European leagues. The aim of this exercise is to present interesting relationships in R using explorative data analysis and visualization.
+
+First you need to access some tables in the database. Note: You can use the `RSQLite::dbConnect()` function to do this. To access a particular database table and convert it to a `data.frame`, you can use the `tbl_df(dbGetQuery(connection, 'SELECT * FROM table_xyz'))` command.
+
+```{r}
+library(RSQLite)
+library(stringr)
+library(dplyr)
+library(sqldf)
+library(DBI)
+library(ggplot2)
+# connect to database
+#con <- dbConnect(SQLite(), dbname = str_c(dirname(getwd()), 
+#                                          "/datasets/EuropeanSoccer.sqlite"))
+conn <- DBI::dbConnect(RSQLite::SQLite(),"E:/OVGU/Subject/Sem 3/Visual Analytics/VisualAnalyticsOVGU/Datasets/EuropeanSoccer.sqlite")
+
+table <- dbListTables(conn)
+
+# tabele queries
+match <- tbl_df(dbGetQuery(conn,"SELECT * FROM Match"))
+country <- tbl_df(dbGetQuery(conn,"SELECT * FROM Country"))
+league <- tbl_df(dbGetQuery(conn,"SELECT * FROM League"))
+player <- tbl_df(dbGetQuery(conn,"SELECT * FROM Player"))
+player_attributes <- tbl_df(dbGetQuery(conn,"SELECT * FROM Player_Attributes"))
+sqlite_sequence <- tbl_df(dbGetQuery(conn,"SELECT * FROM sqlite_sequence"))
+team <- tbl_df(dbGetQuery(conn,"SELECT * FROM Team"))
+team_attributes <- tbl_df(dbGetQuery(conn,"SELECT * FROM Team_Attributes"))
+
+# ...
+# ...
+```
+
+1. The first leagues of Spain, England, Germany and Italy are considered the four most attractive football leagues in Europe.  
+    a) In which of the four leagues do on average score the most or the fewest goals per game? 
+    b) Compare the average, median, standard deviation, variance, range and interquartile distance of goals scored per match between the four most attractive European leagues and the remaining leagues.
+
+```{r}
+# Solution for task 1...
+
+# filter - https://cran.r-project.org/web/packages/crunch/vignettes/filters.html 
+# filter - https://www.guru99.com/r-select-filter-arrange.html 
+
+
+# mean(match[match$totalgoals == 2,]$totalgoals) - returns vector
+# mean(match[match$totalgoals == 2,]["totalgoals"]) - doesnt work as it returns dataframe (as tuple) and not vector
+
+spain = mean(match[match$id == 21518,]$totalgoals)
+england = mean(match[match$id == 1729,]$totalgoals)
+germany = mean(match[match$id == 7809,]$totalgoals)
+italy = mean(match[match$id == 10257,]$totalgoals)
+
+
+
+avgscore <- c(spain, england, germany, italy)
+countrynames <- c("Spain", "England", "Germany", "Italy")
+barplot(avgscore, names.arg = countrynames, xlab = "Country", ylab = "Average Score per game", main = "Average Scores")
+#hist(avgscore,xlab = "country",col = "green",border = "red", xlim = c(0,5), ylim = c(0,2),
+ #  breaks = 5)
+
+```
+```{r}
+
+#Part b
+
+library(ggplot2)
+match3<-match
+match3$country_id <- as.character(match3$country_id)
+match3<-match %>% group_by(country_id)
+
+m<-mean(match3$home_team_goal + match3$away_team_goal)
+curve(dnorm(x, mean=m), col="darkblue", lwd=2, add=TRUE)
+
+med<-median(match3$home_team_goal + match3$away_team_goal)
+curve(dnorm(x, mean=med))
+
+std<-sd(match3$home_team_goal + match3$away_team_goal)
+curve(dnorm(x, sd=std),col="darkblue", lwd=2, add=TRUE)
+
+rang = max(match3$home_team_goal + match3$away_team_goal) - min((match3$home_team_goal + match3$away_team_goal))
+
+vari<-var(match3$home_team_goal + match3$away_team_goal)
+#curve(dnorm(x, var=vari))
+
+
+plot1 <- ggplot(match3, aes(x=name, y=m)) +   xlab("Country") + ylab("Average Goals") +  geom_bar(stat = "identity")
+
+plot2 <- ggplot(match3, aes(x=name, y=med)) +   xlab("Country") + ylab("Median") +  geom_bar(stat = "identity")
+
+plot3 <- ggplot(match3, aes(x=name, y=std)) +   xlab("Country") + ylab("Standard Deviation") +  geom_bar(stat = "identity")
+
+plot4 <- ggplot(match3, aes(x=name, y=vari)) +   xlab("Country") + ylab("Variance") +  geom_bar(stat = "identity")
+
+plot5 <- ggplot(match3, aes(x=name, y=rang)) +   xlab("Country") + ylab("Range") +  geom_bar(stat = "identity")
+
+library(ggpubr)
+figure <- ggarrange(plot1, plot2, plot3,plot4,plot5,
+                    ncol = 2, nrow = 3)
+figure
+
+```
+
+2. Is there really a home advantage? Use a box plot to show the number of goals scored by home and away teams.
+
+```{r}
+# Solution for task 2...
+# https://www.statmethods.net/graphs/boxplot.html
+teamnames <- c("home","away")
+boxplot(match$home_team_goal, match$away_team_goal, data = match, xlab = "teams", names = teamnames, ylab = "away team goal ", main = "Goals scored by teams")
+```
+
+3. _"All soccer players are fair-weather players!"_ Check the assertion with a line chart: Do on average more goals fall per game in the summer months than in the rest of the year?
+
+
+```{r}
+# # Solution for task 3...
+# # https://www.statmethods.net/graphs/line.html
+# # https://www.tutorialspoint.com/r/r_line_graphs.htm 
+# # https://stackoverflow.com/questions/1699046/for-each-row-in-an-r-dataframe 
+# # summer months - May (05) - Aug (08)
+# 
+# goals <- match$home_team_goal + match$away_team_goal
+# 
+# months <- c("01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12")
+# counter <- c(0,0,0,0,0,0,0,0,0,0,0,0)
+# avg <- c(0,0,0,0,0,0,0,0,0,0,0,0)
+# avg_old <- c(0,0,0,0,0,0,0,0,0,0,0,0)
+# 
+# for(j in months){
+#      if( "05" == j){  
+#         counter[as.numeric(j)] = counter[as.numeric(j)] +1  
+#        print( counter[as.numeric(j)])
+#        print(as.numeric(goals[1]))
+#        avg_old = avg
+#        print(avg_old)
+#       # print(as.numeric(j))
+#        avgfunc(counter[as.numeric(j)],as.numeric(goals[1]),as.numeric(j),avg_old)
+#    }}
+# 
+# counter
+# 
+# 
+# avgfunc <- function(count,goal,monthj,avg_old){
+#   avg[monthj] = (((avg_old[monthj]*(count-1))+goal)/count)
+#  #print(c(avg))
+#  return(c(avg))
+# }
+# 
+# for(i in 1:nrow(match)){
+#   month_str <- str_sub(match$date[i],6,7)     #extract month from string
+#   for(j in months){
+#    if( month_str == j){  
+#      counter[as.numeric(j)] = counter[as.numeric(j)] +1              #increase the counter for jth month
+#      #print (counter[j])  
+#       avgfunc(counter[as.numeric(j)],as.numeric(goals[i]),as.numeric(j),avg_old)          #calc incremental average for jth month
+#      }
+#   }
+# }
+# 
+# 
+# plot(avg,type = "o", col = "red", xlab = "Month", ylab = "Avg Goals",
+#    main = "Average Goals in months")
+
+```
+3. _"All soccer players are fair-weather players!"_ Check the assertion with a line chart: Do on average more goals fall per game in the summer months than in the rest of the year?
+
+
+```{r}
+
+#Attempt 2
+
+# dataframe - https://www.datamentor.io/r-programming/data-frame/
+# select, filter - https://www.guru99.com/r-select-filter-arrange.html
+# mean - https://www.tutorialspoint.com/r/r_mean_median_mode.htm 
+# filter - https://dplyr.tidyverse.org/reference/filter.html 
+# filter - https://stackoverflow.com/questions/1686569/filter-data-frame-rows-by-a-logical-condition 
+
+
+match<- mutate(match, month = as.numeric(str_sub(match$date,6,7)), totalgoals = (match$home_team_goal + match$away_team_goal))
+result<- c()
+months <- seq(1:12)
+for(i in months) {
+  result [i] <- mean((filter(match[120],match$month == i))$totalgoals)
+}
+
+plot(result,type = "o", col = "red", xlab = "Month", ylab = "Avg Goals",
+   main = "Average Goals in months")
+
+```
+
+4. Display the average goals scored per game for the top 4 leagues per year from 2008 to 2016.
+
+```{r}
+# Solution for task 4...
+
+#filter(match[120], match$country_id == as.numeric(1729))
+#filter(match[120], match$country_id == as.numeric(1729))$totalgoals
+#1st is in DF and 2nd in List. Mean works with list
+
+#mean(filter(match[120], match$country_id == as.numeric(1729) & match$year == 2008)$totalgoals)
+
+match<- mutate(match, year = as.numeric(str_sub(match$date,1,4)))
+#yearrange <-seq(2008:2016) not working
+yearrange <- c(2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016)
+j = 1
+#spain = england = germany = italy = 0
+for(i in as.numeric(yearrange)){
+  spain[j] <- mean(filter(match[120], match$country_id == as.numeric(21518) & match$year == as.numeric(i))$totalgoals)
+  england[j] <- mean(filter(match[120], match$country_id == as.numeric(1729) & match$year == as.numeric(i))$totalgoals)
+  germany[j] <- mean(filter(match[120], match$country_id == as.numeric(7809) & match$year == as.numeric(i))$totalgoals)
+  italy[j] <- mean(filter(match[120], match$country_id == as.numeric(10257) & match$year == as.numeric(i))$totalgoals)
+  j = j+1 
+}
+spain
+england
+germany
+italy
+
+#barplot(avgscore, names.arg = countrynames, xlab = "Country", ylab = "Average Score per game", main = "Average Scores")
+#countrynames <- c("Spain", "England", "Germany", "Italy")
+
+# https://stackoverflow.com/questions/36968602/multiple-barplots-in-r-side-by-side
+# https://stats.stackexchange.com/questions/14118/drawing-multiple-barplots-on-a-graph-in-r 
+
+
+bars <- rbind(spain, england, germany, italy)
+barplot(bars, beside = T,  names.arg = c(yearrange), xlab = "Year", ylab = "Average Score per game", col = terrain.colors(4), ylim = c(0,5))
+legend(40, 5, c("Spain", "England", "Germany", "Italy"), cex=0.6, 
+       fill=terrain.colors(4))
+
+```
+
+5. Use an estimated density function curve AND a QQ-Plots to check whether the `home_team_possession` variable is (approximately) normally distributed.
+
+```{r}
+# Solution for task 5...
+
+```
+
+6. Use a box plot to show whether there is a correlation between ball ownership (`home_team_possession`) and the number of goals (`home_team_goals`) scored per game for home teams. Create four categories of ball ownership shares: _very low_ ($\leq 25\%$), _low_  ($25\%<x\leq50\%$), _high_ ($50\%<x\leq 75\%$) und _very high_ ($x>75\%$).
+
+```{r}
+# Solution for task 6...
+
+library(corrplot)
+
+homegoal<-match$home_team_goal
+homeposs<-match$home_team_possession
+
+
+boxplot(homegoal, homeposs,
+main="Multiple boxplots for comparision of goals",
+names = c("Home Team Goal", "Home Team Possession"),
+xlab="Teams",
+ylab="Goals",
+col="orange",
+border="brown"
+)
+#v1<-mutate(goal = match$home_team_goal, poss = match$home_team_possession)
+#v1<-match
+#v1
+#v1[1:10] <- NULL
+#v1[2:106] <- NULL
+#v1[3:7] <- NULL
+#getting home team goal and home team possessions only
+
+
+v1<-data.frame(goal=numeric(),poss=numeric())
+str(match$home_team_goal)
+v1$goal <- as.numeric(match$home_team_goal)
+v1$poss <- as.numeric(match$home_team_possession)
+v1$date<-NULL
+
+cor_r<-cor(v1, method = "spearman", use = "complete.obs")
+corrplot(cor_r, type = "upper", order = "hclust", 
+         tl.col = "black", tl.srt = 45)
+
+
+```
+
+------
+Dataset:
+
+- http://isgwww.cs.uni-magdeburg.de/cv/lehre/VisAnalytics/material/exercise/datasets/EuropeanSoccer.sqlite  
+(For database schema and explanation of variables, see: https://www.kaggle.com/hugomathien/soccer)

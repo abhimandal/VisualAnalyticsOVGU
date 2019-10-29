@@ -84,6 +84,7 @@ plot(lmodel)
 #We can consider a linear model to be statistically significant only when both these p-Values are less that the pre-determined statistical significance level(0.05).
 # For individual variables, the most no. of stars, the more significant they are.
 
+#pvalues are important because that 
 
 #Part - b
 
@@ -94,7 +95,7 @@ plot(lmodel)
 #Adjusted R² -> 0.66. Therefore 66% of the variability can ve explained by model
 #Adjusted R² taken because normal R² increases irrespectively as you increase the no. of independent variables
 
-
+var(fitted(lmodel)) #variance
 
 #Part - c
 
@@ -113,6 +114,7 @@ lines(xfit, yfit)
 #Homoscedasticity - Residuals should not have pattern (in Scale-Location or in plot(lmodel$residuals))
 #If the red line you see on your plot is flat and horizontal with equally and randomly spread data points (like the night sky), you’re good. If your red line has a positive slope to it, or if your data points are not randomly spread out, you’ve violated this assumption.
 
+#Very good doc on Residuals - http://docs.statwing.com/interpreting-residual-plots-to-improve-your-regression/ 
 
 ```
 
@@ -131,6 +133,35 @@ plot(lmodel$residuals, pch = 20, col = "blue")
 plot(y= hprice$price, x = lmodel$residuals,  pch = 20, col = "blue")
 abline(lmodel)
 
+
+library(tidyr)
+library(ggplot2)
+test <- hprice[,1:5]
+
+fit_extra <- lm(price ~ lotsize+sqrm,data = test)
+
+test$predicted <- predict(fit_extra)
+test$residuals <- residuals(fit_extra)
+
+
+# ggplot(test, aes(x = price, y = lotsize+sqrm)) +
+#   geom_segment(aes(xend = price, yend = predicted), alpha = .2) +
+#   geom_point(aes(color = residuals)) +
+#   scale_color_gradient2(low = "blue", mid = "white", high = "red") +
+#   guides(color = FALSE) +
+#   geom_point(aes(y = predicted), shape = 1) +
+#   theme_bw()
+
+test %>% 
+  gather(key = "iv", value = "x", -price, -predicted, -residuals) %>%  # Get data into shape
+  ggplot(aes(x = x, y = price)) +  # Note use of `x` here and next line
+  geom_segment(aes(xend = x, yend = predicted), alpha = .2) +
+  geom_point(aes(color = residuals)) +
+  scale_color_gradient2(low = "blue", mid = "white", high = "red") +
+  guides(color = FALSE) +
+  geom_point(aes(y = predicted), shape = 1) +
+  facet_grid(~ iv, scales = "free_x") +  # Split panels here by `iv`
+  theme_bw()
 
 
 #part-b
@@ -153,8 +184,10 @@ summary(lmodel1)
 # Solution for Task 3...
 
 plot(x=hprice$bdrms, y=hprice$price)
+library(ggstance)
 
 lmodel2 = lm(price~bdrms, data=hprice)
+lines(hprice$bdrms, predict(lmodel2), col = 'blue')
 summary(lmodel)
 summary(lmodel2)
 

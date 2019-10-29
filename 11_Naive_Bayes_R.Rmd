@@ -1,0 +1,179 @@
+---
+title: "Excersice Sheet 11"
+fontsize: 11pt
+header-includes: \usepackage[german]{babel}
+output:
+  pdf_document:
+    highlight: haddock
+  html_document: default
+fig_caption: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      eval = TRUE,
+                      warning = FALSE,
+                      message = FALSE)
+
+```
+
+```{r}
+
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(readr)
+library(tidytext)
+
+# (Adapt Path)
+spamdata <- read.csv(str_c(dirname(getwd()), "/Datasets/spam.csv"), header = TRUE)
+spamdata[] <- lapply(spamdata, as.character) 
+
+#https://stackoverflow.com/questions/38986909/read-csv-with-utf-8-encoding 
+
+```
+
+**Block 1**: Develop a Naive Bayesian classifier that can detect spam SMS. The learning record contains the text and the label for each SMS: Spam SMS are marked as `spam` and normal SMS as `ham`. The record is to be converted into a Document-Term Matrix$^1$, which serves as input for the Naive Bayes classifier.
+
+1. Determine the number of `spam` and `ham` messages in the record. Perform a word tokenization$^2$. For example, you can use `tidytext::unnest_tokens()`. Convert all uppercase letters to lowercase letters and remove punctuation marks like ".", "," and ";". Remove stop words like "and", "of" and "or" from the SMS text. You can use stop dictionaries like `tidytext::stop_words` or `tm::stopwords()`.
+```{r}
+spamdata %>%
+  group_by(type) %>%
+  summarise(n_distinct(text))
+
+#NOTE: word and text are by default used by other funcs to identify and perform tasks, like anti_join(). If [output col] is something else, then we have to mention by. https://stackoverflow.com/questions/47336224/remove-stop-words-from-data-frame 
+
+corpus <- spamdata %>% 
+        unnest_tokens(output = "word", input = "text", to_lower = TRUE, drop = TRUE)%>%
+        anti_join(stop_words)%>%
+        filter(!str_detect(word, "[:punct:]|[:digit:]")) 
+
+
+```
+
+2. Identify the 10 most common words for Spam and Ham SMS. Remove words that occur less than 2 times in total in all SMS. Create a Document-Term Matrix. The rows of the matrix correspond to the SMS and the columns correspond to all words that occur in all SMS. Each value in the matrix indicates whether a particular word occurs in a particular SMS (`TRUE`/`FALSE`).
+```{r}
+
+#https://stackoverflow.com/questions/51272510/how-to-count-unique-rows-in-a-data-frame
+#https://stackoverflow.com/questions/19297475/simplest-way-to-get-rbind-to-ignore-column-names
+
+
+wordfreq <- corpus %>% group_by_all %>% count(sort = TRUE) 
+
+freq <- head(wordfreq,10)
+
+
+freqwords <- data.frame()
+# setNames(freqwords,names(wordfreq))
+# colnames (freqwords) <- c("type","word","n")
+freqwords <- wordfreq[1,]
+
+
+for(i in seq(1:nrow(wordfreq))){
+  if(wordfreq[i,3]>2){
+    freqwords <- rbind(freqwords,wordfreq[i,])
+  }
+}
+#Remove the extra row added for setting the colname
+freqwords <- freqwords[-c(1),]
+
+
+
+library(tm)
+spamdata_dtm <- spamdata
+colnames(spamdata_dtm)<-c("doc_id", "text")
+df_source <- DataframeSource(spamdata_dtm)
+df_corpus <- VCorpus(df_source)
+sms_dtm <- DocumentTermMatrix(df_corpus, control = 
+                                 list(tolower = TRUE,
+                                      removeNumbers = TRUE,
+                                      stopwords = TRUE,
+                                      removePunctuation = TRUE,
+                                      stemming = TRUE)
+)
+as.matrix(sms_dtm)[1:10, 250:255]
+
+dim(sms_dtm)
+
+```
+
+3. Divide the data set into a training and a test quantity in the ratio 70%:30%. Make sure that the distribution of `spam` and `ham` is approximately the same in both quantities. Use `set.seed()` for reproducibility. Learn a Naive Bayes classifier on the training set, e.g. with `e1071:naiveBayes()`. Use the learned model to predict spam in the test set. Create a Confusion Matrix and calculate Accuracy, Sensitivity and Specificity. Calculate the improvement or deterioration in accuracy, sensitivity and specificity of the model compared to a simpler classifier that would always predict the majority class (`ham`) for each SMS.
+
+```{r}
+set.seed(123)
+
+#proportion of Spam and Ham msgs
+table(spamdata$type)
+prop.table(table(spamdata$type))
+
+set.seed(123)
+#Training & Test set
+sms_dtm_train <- sms_dtm[1:3900, ]
+sms_dtm_test <- sms_dtm[3900:5572, ]
+
+#Training & Test Label
+sms_train_labels <- spamdata[1:4457, ]$type
+sms_test_labels <- spamdata[4458:5572, ]$type
+
+#Proportion for training & test labels
+prop.table(table(sms_train_labels))
+prop.table(table(sms_test_labels))
+
+
+threshold <- 0.1
+
+min_freq = round(sms_dtm$nrow*(threshold/100),0)
+
+min_freq
+
+# Create vector of most frequent words
+freq_words <- findFreqTerms(x = sms_dtm, lowfreq = min_freq)
+
+str(freq_words)
+
+#Filter the DTM
+sms_dtm_freq_train <- sms_dtm_train[ , freq_words]
+sms_dtm_freq_test <- sms_dtm_test[ , freq_words]
+
+dim(sms_dtm_freq_train)sms_dtm_freq_train <- sms_dtm_train[ , freq_words]
+sms_dtm_freq_test <- sms_dtm_test[ , freq_words]
+
+dim(sms_dtm_freq_train)
+
+```
+
+------
+
+**Block 2**: Since 1946, all member states of the United Nations have come together at the United Nations General Assembly to discuss and vote on resolutions, among other things. Currently 193 states belong to the United Nations. Each of these member states has exactly one vote in the General Assembly's resolution votes on issues such as disarmament, international security, humanitarian aid and human rights.  
+The record for this task contains the complete voting process at the General Assembly of each country. Is it possible to predict whether Germany will vote "yes" or "no" in a resolution vote?
+
+4. Display the number of resolutions voted on each year in a line chart. In which year were there the most votes and how many were there? Calculate between Germany and the USA for each year the proportion of equal votes (variable `vote`) for resolutions, hereinafter referred to as `agreement`. For the year 2006, the agreement between the two states was only about 25% of a total of 87 votes. (_Note: until 1989 "Federal Republic of Germany"; from 1989 "Germany"_) 
+
+```{r}
+
+```
+
+5. Create a linear regression model that predicts the agreement between the two states based on the year (`agreement ~ year`). Interpret the trend and the p-value of the regression coefficient for `year`. Check the statement of the model graphically. Create a distance matrix between all pairs of states based on their voting history. Only consider states that have cast a vote in at least 70% of all votes. Determine the 5 states that are most similar or most dissimilar to Germany with regard to the voting history at UN General Assemblies.
+
+```{r}
+
+```
+
+
+6. Divide the data set into a training and test set at a ratio of 75%:25%. Create a $kNN$ classifier with $k=3$ (`caret::knn3Train()`) to predict the vote of Germany in a vote based on the votes of the countries ` 'Italy', 'Netherlands', 'United States of America', 'Israel', 'Cuba', 'India'`. Remove votes in which Germany abstained (`vote=2` ("Abstain")) to get a binary target variable for `vote=1` ("Yes") and `vote=0` ("No"). Create the Confusion Matrix and calculate the Accuracy for the model. On the same data, create a logistic regression model (`glm(..., family = "binomial")`) and compare the accuracy with that of the $kNN$ classifier.
+
+
+```{r}
+
+```
+
+------
+Dataset for Block 1: http://isgwww.cs.uni-magdeburg.de/cv/lehre/VisAnalytics/material/exercise/datasets/spam.csv  
+(adaptiert von http://www.dt.fee.unicamp.br/~tiago/smsspamcollection/)
+
+Dataset for Block 2: http://isgwww.cs.uni-magdeburg.de/cv/lehre/VisAnalytics/material/exercise/datasets/UNVotes.rds  
+(adapted by https://dataverse.harvard.edu/dataset.xhtml?persistentId=hdl:1902.1/12379)  
+- Data Dictionary / Codebook: http://isgwww.cs.uni-magdeburg.de/cv/lehre/VisAnalytics/material/exercise/datasets/UNVotes_Codebook.pdf
+
+$^1$ https://en.wikipedia.org/wiki/Document-term_matrix  
+$^2$ https://de.wikipedia.org/wiki/Tokenisierung, http://tidytextmining.com/tidytext.html
